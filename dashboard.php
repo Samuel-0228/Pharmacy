@@ -7,13 +7,40 @@ if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit();
 }
-?>
 
-<?php
+// Fetch dynamic stats...
 if ($_SESSION['role'] == 'admin') {
+    // New orders count
     $res = $conn->query("SELECT COUNT(*) as new_orders FROM orders WHERE viewed = 0");
     $row = $res->fetch_assoc();
     $new_orders = $row['new_orders'];
+
+    // Total Medicines
+    $total_medicines_res = $conn->query("SELECT COUNT(*) as count FROM medicines");
+    $total_medicines = $total_medicines_res->fetch_assoc()['count'];
+
+    // Total Orders
+    $total_orders_res = $conn->query("SELECT COUNT(*) as count FROM orders");
+    $total_orders = $total_orders_res->fetch_assoc()['count'];
+
+    // Total Customers
+    $total_customers_res = $conn->query("SELECT COUNT(*) as count FROM users WHERE role = 'customer'");
+    $total_customers = $total_customers_res->fetch_assoc()['count'];
+
+    // Revenue
+    $revenue_res = $conn->query("SELECT SUM(total_price) as revenue FROM orders WHERE status = 'Completed' AND payment_status = 'Paid'");
+    $revenue = $revenue_res->fetch_assoc()['revenue'] ?? 0;
+    $revenue_formatted = '$' . number_format($revenue, 0);
+
+    // Recent Orders
+    $recent_orders_res = $conn->query("
+        SELECT o.order_id, u.name as customer, o.total_price, o.status, o.payment_status, o.order_date 
+        FROM orders o 
+        JOIN users u ON o.user_id = u.user_id 
+        ORDER BY o.order_date DESC 
+        LIMIT 5
+    ");
+    $recent_orders = $recent_orders_res->fetch_all(MYSQLI_ASSOC);
 }
 ?>
 
@@ -21,145 +48,29 @@ if ($_SESSION['role'] == 'admin') {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - Online Pharmacy</title>
-    <style>
-        * { margin:0; padding:0; box-sizing:border-box; font-family: 'Arial', sans-serif; }
-
-        body {
-            background: #f4f6f8;
-        }
-
-        /* Sidebar */
-        .sidebar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 220px;
-            height: 100%;
-            background: #2980B9;
-            color: #fff;
-            display: flex;
-            flex-direction: column;
-            padding-top: 20px;
-        }
-
-        .sidebar h2 {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        .sidebar a {
-            color: #fff;
-            text-decoration: none;
-            padding: 15px 20px;
-            display: block;
-            transition: 0.3s;
-        }
-
-        .sidebar a:hover {
-            background: #1f5f8b;
-        }
-
-        /* Main content */
-        .main-content {
-            margin-left: 220px;
-            padding: 20px;
-        }
-
-        .topbar {
-            background: #fff;
-            padding: 15px 20px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-radius: 8px;
-        }
-
-        .topbar h1 {
-            font-size: 20px;
-            color: #2980B9;
-        }
-
-        .cards {
-            display: flex;
-            flex-wrap: wrap;
-            margin-top: 20px;
-            gap: 20px;
-        }
-
-        .card {
-            background: #fff;
-            flex: 1 1 200px;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
-        }
-
-        .card h3 {
-            color: #2980B9;
-            margin-bottom: 10px;
-        }
-
-        .card p {
-            font-size: 24px;
-            font-weight: bold;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-            background: #fff;
-            border-radius: 10px;
-            overflow: hidden;
-        }
-
-        table th, table td {
-            padding: 12px 15px;
-            border-bottom: 1px solid #ddd;
-            text-align: left;
-        }
-
-        table th {
-            background: #2980B9;
-            color: #fff;
-        }
-
-        table tr:hover {
-            background: #f1f1f1;
-        }
-
-        button {
-            padding: 8px 12px;
-            background: #2980B9;
-            color: #fff;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: 0.3s;
-        }
-
-        button:hover {
-            background: #1f5f8b;
-        }
-
-    </style>
+    <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
+<body class="dashboard-page">  <!-- Optional class for page-specific tweaks -->
 
     <div class="sidebar">
         <h2>Admin Panel</h2>
-        <a href="dashboard.php">Dashboard</a>
-        <a href="medicines.php">Manage Medicines</a>
-        <a href="orders.php">Manage Orders</a>
-        <a href="users.php">Manage Users</a>
-        <a href="logout.php">Logout</a>
+        <a href="dashboard.php">📊 Dashboard</a>
+        <a href="medicines.php">💊 Manage Medicines</a>
+        <a href="orders.php">📦 Manage Orders</a>
+        <a href="users.php">👥 Manage Users</a>
+        <a href="logout.php">🚪 Logout</a>
     </div>
 
     <div class="main-content">
-        <div class="topbar">
-            <h1>Welcome, Admin</h1>
+        <div class="topbar">  <!-- Reuse or add .topbar to your CSS if needed -->
+            <div>
+                <h1>Welcome, Admin</h1>
+                <?php if ($new_orders > 0): ?>
+                    <div class="notification">New Orders: <?php echo $new_orders; ?></div>
+                <?php endif; ?>
+            </div>
             <span>🕒 <?php echo date("Y-m-d H:i"); ?></span>
         </div>
 
@@ -167,59 +78,76 @@ if ($_SESSION['role'] == 'admin') {
         <div class="cards">
             <div class="card">
                 <h3>Total Medicines</h3>
-                <p>120</p>
+                <p><?php echo $total_medicines ?? 0; ?></p>
             </div>
             <div class="card">
                 <h3>Total Orders</h3>
-                <p>85</p>
+                <p><?php echo $total_orders ?? 0; ?></p>
             </div>
             <div class="card">
                 <h3>Total Customers</h3>
-                <p>45</p>
+                <p><?php echo $total_customers ?? 0; ?></p>
             </div>
             <div class="card">
                 <h3>Revenue</h3>
-                <p>$12,500</p>
+                <p><?php echo $revenue_formatted; ?></p>
             </div>
         </div>
 
         <!-- Recent Orders Table -->
-        <h2 style="margin-top: 30px; color: #2980B9;">Recent Orders</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Order ID</th>
-                    <th>Customer</th>
-                    <th>Total</th>
-                    <th>Status</th>
-                    <th>Payment</th>
-                    <th>Date</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>101</td>
-                    <td>John Doe</td>
-                    <td>$150</td>
-                    <td>Pending</td>
-                    <td>Paid</td>
-                    <td>2025-09-28</td>
-                    <td><button>View</button></td>
-                </tr>
-                <tr>
-                    <td>102</td>
-                    <td>Jane Smith</td>
-                    <td>$220</td>
-                    <td>Completed</td>
-                    <td>Paid</td>
-                    <td>2025-09-27</td>
-                    <td><button>View</button></td>
-                </tr>
-                <!-- More rows will come dynamically with PHP -->
-            </tbody>
-        </table>
+        <div class="table-section">
+            <h2>Recent Orders</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Order ID</th>
+                        <th>Customer</th>
+                        <th>Total</th>
+                        <th>Status</th>
+                        <th>Payment</th>
+                        <th>Date</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (isset($recent_orders) && count($recent_orders) > 0): ?>
+                        <?php foreach ($recent_orders as $order): ?>
+                            <tr>
+                                <td><?php echo $order['order_id']; ?></td>
+                                <td><?php echo htmlspecialchars($order['customer']); ?></td>
+                                <td>$<?php echo number_format($order['total_price'], 2); ?></td>
+                                <td class="status-<?php echo strtolower($order['status']); ?>"><?php echo $order['status']; ?></td>
+                                <td><?php echo $order['payment_status']; ?></td>
+                                <td><?php echo date('Y-m-d', strtotime($order['order_date'])); ?></td>
+                                <td><button onclick="viewOrder(<?php echo $order['order_id']; ?>)">View</button></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="7" style="text-align: center; color: #7f8c8d;">No recent orders found.</td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
     </div>
+
+    <script>
+        function viewOrder(id) {
+            if (confirm('View order details for ID ' + id + '?')) {
+                window.location.href = 'order_details.php?id=' + id;
+            }
+        }
+
+        // Animate cards on load
+        document.addEventListener('DOMContentLoaded', function() {
+            const cards = document.querySelectorAll('.card');
+            cards.forEach((card, index) => {
+                card.style.animationDelay = (index * 0.1) + 's';
+                card.style.animation = 'slideDown 0.5s ease forwards';
+            });
+        });
+    </script>
 
 </body>
 </html>
